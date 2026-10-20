@@ -1,0 +1,12 @@
+{
+  "name": "fitclub-tabata",
+  "private": true,
+  "description": "Fit Club Tabata Timer: offline PWA for Cville Outdoor Fitness",
+  "scripts": {
+    "serve": "python3 -m http.server 8080 --directory app",
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1"
+  }
+}
