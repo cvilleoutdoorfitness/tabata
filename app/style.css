@@ -75,7 +75,7 @@ button { font: inherit; cursor: pointer; touch-action: manipulation; }
   gap: 10px;
   padding: 10px 14px;
 }
-.logo { border-radius: 50%; flex: none; }
+.logo { flex: none; }
 .brand { display: flex; flex-direction: column; line-height: 1.15; flex: 1; min-width: 0; }
 .brand-small { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 .brand-big { font-size: 17px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

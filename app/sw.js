@@ -1,6 +1,6 @@
 // Offline support: cache the whole app on install, then serve from cache.
 // Bump CACHE whenever any file changes so phones pick up the new version.
-const CACHE = 'fitclub-tabata-v1.0.0';
+const CACHE = 'fitclub-tabata-v1.0.1';
 const FILES = [
   './',
   'index.html',
@@ -13,6 +13,7 @@ const FILES = [
   'icons/icon-maskable-512.png',
   'icons/apple-touch-icon.png',
   'icons/favicon-64.png',
+  'icons/favicon-192.png',
   'icons/fit-club.png',
 ];
 

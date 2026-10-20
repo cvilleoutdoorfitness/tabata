@@ -1,6 +1,6 @@
 'use strict';
 
-const VERSION = 'v1.0.0';
+const VERSION = 'v1.0.1';
 const STORE_KEY = 'fitclub-tabata-settings';
 
 const DEFAULTS = {
@@ -22,7 +22,21 @@ const CHEERS = [
   'Nailed it. Go grab some water.',
   'That was legendary.',
   'Sweaty and proud!',
-  'See you tomorrow, outside!',
+  'You don\u2019t get this at the gym.',
+  'Fresh air, fresh legs. Well, not anymore.',
+  'Squirrels everywhere are impressed.',
+  'Rain or shine, you showed up.',
+  'Your future self says thanks.',
+  'Four minutes of pain, all day of bragging rights.',
+  'Coffee has been earned.',
+  'No mirrors, no membership, no excuses.',
+  'Hills fear you now.',
+  'Sun\u2019s up, work\u2019s done.',
+  'Best view of any gym in town.',
+  'That\u2019s how Cville does it.',
+  'Take a bow. Then maybe sit down.',
+  'Legs: jelly. Spirit: unbreakable.',
+  'High fives all around!',
 ];
 
 const $ = (id) => document.getElementById(id);

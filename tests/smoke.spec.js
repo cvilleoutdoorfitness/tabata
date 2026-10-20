@@ -47,13 +47,16 @@ test('timer runs a full workout without errors', async ({ page }) => {
 
   await page.click('#mainBtn');
   await expect(page.locator('body')).toHaveAttribute('data-phase', 'prep');
+  await page.waitForTimeout(400); // let the color transition finish
   await page.screenshot({ path: `${shots}/2-get-ready.png` });
 
   await expect(page.locator('body')).toHaveAttribute('data-phase', 'work', { timeout: 5000 });
   await expect(page.locator('#round')).toHaveText('Round 1 of 2');
+  await page.waitForTimeout(400); // let the color transition finish
   await page.screenshot({ path: `${shots}/3-work.png` });
 
   await expect(page.locator('body')).toHaveAttribute('data-phase', 'rest', { timeout: 7000 });
+  await page.waitForTimeout(400); // let the color transition finish
   await page.screenshot({ path: `${shots}/4-rest.png` });
 
   // Pause holds the clock.
