@@ -7,39 +7,126 @@ const Sounds = (() => {
   let master = null;
   let noiseBuf = null;
   let volume = 1;
+  let keepAlive = null;
+  let stale = false; // context stopped after it had been playing
+
+  // iPhone/iPad (iPadOS reports itself as a Mac with touch).
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+  // iOS 17+: play through the ringer/silent switch like a media app.
+  // Set it before any audio starts, and again on every unlock because iOS
+  // can drop back to the default after an interruption.
+  function setSessionType() {
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+  }
+  setSessionType();
+
+  function build() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    const c = new AC();
+    ctx = c;
+    stale = false;
+    let ran = c.state === 'running';
+    c.onstatechange = () => {
+      if (c.state === 'running') ran = true;
+      else if (ran && c === ctx) stale = true;
+    };
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -14;
+    comp.knee.value = 6;
+    comp.ratio.value = 6;
+    comp.attack.value = 0.003;
+    comp.release.value = 0.15;
+    master = ctx.createGain();
+    master.gain.value = volume;
+    master.connect(comp);
+    comp.connect(ctx.destination);
+    noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
 
   function ensure() {
-    if (!ctx) {
-      // iOS 17+: play through the ringer/silent switch like a media app.
-      try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
-      const AC = window.AudioContext || window.webkitAudioContext;
-      ctx = new AC();
-      const comp = ctx.createDynamicsCompressor();
-      comp.threshold.value = -14;
-      comp.knee.value = 6;
-      comp.ratio.value = 6;
-      comp.attack.value = 0.003;
-      comp.release.value = 0.15;
-      master = ctx.createGain();
-      master.gain.value = volume;
-      master.connect(comp);
-      comp.connect(ctx.destination);
-      noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
-      const d = noiseBuf.getChannelData(0);
-      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    }
+    // iOS can leave a context "interrupted" (ringer switch, a call, Siri,
+    // locking the phone) and sometimes never lets it resume. A closed or
+    // interrupted context is thrown away and rebuilt so sound comes back
+    // without restarting the app.
+    if (ctx && (ctx.state === 'closed' || ctx.state === 'interrupted')) drop();
+    if (!ctx) build();
     return ctx;
   }
 
-  // Call from a user gesture (tap) so iOS/Android allow audio.
-  function unlock() {
+  function drop() {
+    const c = ctx;
+    ctx = null;
+    try { c.close().catch(() => {}); } catch (e) {}
+  }
+
+  function wake() {
     ensure();
-    if (ctx.state !== 'running') ctx.resume();
+    if (ctx.state !== 'running') ctx.resume().catch(() => {});
+  }
+
+  // A silent, looping <audio> element puts iOS in "media playback" mode,
+  // which is what lets Web Audio play while the ringer is set to silent on
+  // iPhones where navigator.audioSession is missing or ignored (e.g. the
+  // home-screen app). It has to be started from a tap.
+  function silentWav() {
+    const rate = 8000, n = rate / 2; // half a second of silence
+    const buf = new ArrayBuffer(44 + n);
+    const v = new DataView(buf);
+    const str = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+    str(0, 'RIFF'); v.setUint32(4, 36 + n, true); str(8, 'WAVE');
+    str(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, rate, true); v.setUint32(28, rate, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true);
+    str(36, 'data'); v.setUint32(40, n, true);
+    for (let i = 0; i < n; i++) v.setUint8(44 + i, 128); // 8-bit silence
+    return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+  }
+
+  function startKeepAlive() {
+    if (!isIOS) return;
+    if (!keepAlive) {
+      keepAlive = document.createElement('audio');
+      keepAlive.src = silentWav();
+      keepAlive.loop = true;
+      keepAlive.preload = 'auto';
+      keepAlive.setAttribute('playsinline', '');
+      keepAlive.setAttribute('x-webkit-airplay', 'deny');
+      keepAlive.disableRemotePlayback = true;
+    }
+    if (keepAlive.paused) {
+      const p = keepAlive.play();
+      if (p) p.catch(() => {});
+    }
+  }
+
+  // Call from a user gesture (tap) so iOS/Android allow audio. Safe to call
+  // on every tap: it also repairs audio that iOS has stopped.
+  function unlock() {
+    // A context iOS stopped mid-session can come back "running" but silent,
+    // so on a tap we start over with a fresh one.
+    if (stale) drop();
+    setSessionType();
+    startKeepAlive();
+    wake();
     const b = ctx.createBufferSource();
     b.buffer = ctx.createBuffer(1, 1, 22050);
     b.connect(ctx.destination);
     b.start(0);
   }
+
+  // Any tap anywhere re-arms audio, so a stuck context fixes itself the next
+  // time the coach touches the screen.
+  ['pointerdown', 'touchend', 'keydown'].forEach((ev) =>
+    document.addEventListener(ev, () => { if (ctx) unlock(); }, { capture: true, passive: true }));
+
+  // Coming back to the app (after locking the phone, a call, switching
+  // apps) restarts audio that iOS paused.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && ctx) { startKeepAlive(); wake(); }
+  });
 
   function setVolume(v) {
     volume = v;
@@ -294,8 +381,7 @@ const Sounds = (() => {
   const funny = ['airhorn', 'cowbell', 'honk', 'quack', 'laser', 'slideup', 'slidedown', 'levelup', 'trombone', 'gong'];
 
   function play(id) {
-    ensure();
-    if (ctx.state !== 'running') ctx.resume();
+    wake();
     if (id === 'random') id = funny[Math.floor(Math.random() * funny.length)];
     const d = defs[id] || defs.none;
     d.play(ctx.currentTime + 0.02);
@@ -303,12 +389,15 @@ const Sounds = (() => {
 
   // Short countdown tick (3-2-1).
   function tick(final) {
-    ensure();
-    if (ctx.state !== 'running') ctx.resume();
+    wake();
     tone(ctx.currentTime + 0.01, final ? 1320 : 880, 0.12, { type: 'square', peak: 0.3 });
   }
 
   const list = Object.entries(defs).map(([id, d]) => ({ id, label: d.label }));
 
-  return { unlock, play, tick, setVolume, list };
+  // Exposed for tests.
+  const context = () => ctx;
+  const keepAliveOn = () => !!keepAlive && !keepAlive.paused;
+
+  return { unlock, play, tick, setVolume, list, context, keepAliveOn };
 })();
