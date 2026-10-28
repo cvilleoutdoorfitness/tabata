@@ -1,6 +1,6 @@
 // Offline support: cache the whole app on install, then serve from cache.
 // Bump CACHE whenever any file changes so phones pick up the new version.
-const CACHE = 'fitclub-tabata-v1.0.2';
+const CACHE = 'fitclub-tabata-v1.1.0';
 const FILES = [
   './',
   'index.html',

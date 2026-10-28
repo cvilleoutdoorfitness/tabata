@@ -97,3 +97,50 @@ test('sound recovers after iOS stops the audio', async ({ page }) => {
 
   expect(errors).toEqual([]);
 });
+
+test('Dana mode drums play only during exercise', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+
+  await page.goto('/');
+  await page.evaluate(() => localStorage.setItem('fitclub-tabata-settings',
+    JSON.stringify({ work: 5, rest: 5, rounds: 2, prep: 2 })));
+  await page.reload();
+
+  // Off by default; switching it on plays a short preview that stops itself.
+  await page.click('#settingsBtn');
+  await expect(page.locator('#dana')).not.toBeChecked();
+  await page.check('#dana');
+  expect(await page.evaluate(() => Sounds.drumsOn())).toBe(true);
+  await page.locator('#dana').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: `${shots}/9-dana-setting.png` });
+  await expect.poll(() => page.evaluate(() => Sounds.drumsOn()), { timeout: 6000 }).toBe(false);
+  await page.click('#settingsDone');
+
+  await page.reload(); // the choice is remembered
+  await page.click('#mainBtn');
+  expect(await page.evaluate(() => Sounds.drumsOn())).toBe(false); // get ready: quiet
+
+  await expect(page.locator('body')).toHaveAttribute('data-phase', 'work', { timeout: 4000 });
+  expect(await page.evaluate(() => Sounds.drumsOn())).toBe(true);
+  await expect(page.locator('.dana-badge')).toBeVisible();
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `${shots}/10-dana-work.png` });
+
+  // Pause silences the drums, resume brings them back.
+  await page.click('#mainBtn');
+  expect(await page.evaluate(() => Sounds.drumsOn())).toBe(false);
+  await page.click('#mainBtn');
+  expect(await page.evaluate(() => Sounds.drumsOn())).toBe(true);
+
+  await expect(page.locator('body')).toHaveAttribute('data-phase', 'rest', { timeout: 7000 });
+  expect(await page.evaluate(() => Sounds.drumsOn())).toBe(false);
+  await expect(page.locator('.dana-badge')).toBeHidden();
+
+  await expect(page.locator('body')).toHaveAttribute('data-phase', 'work', { timeout: 7000 });
+  expect(await page.evaluate(() => Sounds.drumsOn())).toBe(true);
+
+  await expect(page.locator('body')).toHaveAttribute('data-phase', 'done', { timeout: 8000 });
+  expect(await page.evaluate(() => Sounds.drumsOn())).toBe(false);
+  expect(errors).toEqual([]);
+});

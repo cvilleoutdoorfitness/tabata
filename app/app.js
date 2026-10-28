@@ -1,6 +1,6 @@
 'use strict';
 
-const VERSION = 'v1.0.2';
+const VERSION = 'v1.1.0';
 const STORE_KEY = 'fitclub-tabata-settings';
 
 const DEFAULTS = {
@@ -14,6 +14,7 @@ const DEFAULTS = {
   ticks: true,
   vibrate: true,
   volume: 1,
+  dana: false,
 };
 
 const CHEERS = [
@@ -126,6 +127,7 @@ function start() {
 function pause() {
   state.frozen = elapsed();
   setMode('paused');
+  Sounds.drums(false);
 }
 
 function resume() {
@@ -134,10 +136,12 @@ function resume() {
   setMode('running');
   keepAwake(true);
   loop();
+  if (state.idx >= 0 && state.plan.segs[state.idx].phase === 'work') danaDrums();
 }
 
 function reset() {
   setMode('idle');
+  Sounds.drums(false);
   keepAwake(false);
   renderIdle();
 }
@@ -146,6 +150,7 @@ function finish() {
   state.frozen = state.plan.total;
   setMode('done');
   keepAwake(false);
+  Sounds.drums(false);
   Sounds.play(settings.sndDone);
   buzz([400, 150, 400, 150, 600]);
   el.body.dataset.phase = 'done';
@@ -211,12 +216,23 @@ function enter(seg) {
     el.round.textContent = `Round ${seg.round} of ${settings.rounds}`;
     Sounds.play(settings.sndStart);
     buzz([350]);
+    danaDrums(0.4); // let the start sound ring first
   } else {
+    Sounds.drums(false);
     el.phase.textContent = 'Rest';
     el.round.textContent = `Next: round ${seg.round + 1} of ${settings.rounds}`;
     Sounds.play(settings.sndRest);
     buzz([150, 100, 150]);
   }
+}
+
+// Dana mode: drum circle loop for the whole exercise interval.
+function danaDrums(delay = 0) {
+  if (settings.dana) Sounds.drums(true, delay);
+}
+
+function inWork() {
+  return state.mode === 'running' && el.body.dataset.phase === 'work';
 }
 
 function buzz(pattern) {
@@ -286,6 +302,7 @@ function syncSettingsUI() {
   ['sndStart', 'sndRest', 'sndDone'].forEach((k) => { $(k).value = settings[k]; });
   $('ticks').checked = settings.ticks;
   $('vibrate').checked = settings.vibrate;
+  $('dana').checked = settings.dana;
   $('vibrate').closest('.toggle').hidden = !navigator.vibrate;
   $('volume').value = settings.volume;
   const { total } = buildSchedule(settings);
@@ -348,6 +365,26 @@ document.querySelectorAll('.test').forEach((btn) => {
   $(k).addEventListener('change', () => { settings[k] = $(k).checked; save(); });
 });
 
+// Turning Dana mode on plays a few seconds of the groove as a preview.
+let danaPreview = null;
+$('dana').addEventListener('change', () => {
+  settings.dana = $('dana').checked;
+  save();
+  el.body.classList.toggle('dana', settings.dana);
+  clearTimeout(danaPreview);
+  Sounds.unlock();
+  if (settings.dana) {
+    Sounds.drums(true);
+    danaPreview = setTimeout(() => { if (!inWork()) Sounds.drums(false); }, 4300);
+  } else {
+    Sounds.drums(false);
+  }
+});
+$('settingsDone').addEventListener('click', () => {
+  clearTimeout(danaPreview);
+  if (!inWork()) Sounds.drums(false);
+});
+
 $('volume').addEventListener('input', () => {
   settings.volume = +$('volume').value;
   Sounds.setVolume(settings.volume);
@@ -358,6 +395,8 @@ $('volume').addEventListener('change', () => { Sounds.unlock(); Sounds.tick(); }
 $('resetDefaults').addEventListener('click', () => {
   settings = { ...DEFAULTS };
   Sounds.setVolume(settings.volume);
+  el.body.classList.toggle('dana', settings.dana);
+  if (!inWork()) Sounds.drums(false);
   save();
   syncSettingsUI();
 });
@@ -393,4 +432,5 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
 }
 
 Sounds.setVolume(settings.volume);
+el.body.classList.toggle('dana', settings.dana);
 renderIdle();

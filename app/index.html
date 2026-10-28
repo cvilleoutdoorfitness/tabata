@@ -34,6 +34,7 @@
   <div class="phase" id="phase">Ready</div>
   <div class="count" id="count" aria-live="off">0:00</div>
   <div class="round" id="round"></div>
+  <div class="dana-badge" aria-hidden="true">🥁 Dana mode</div>
   <div class="bar" aria-hidden="true"><div class="bar-fill" id="barFill"></div></div>
   <div class="summary" id="summary"></div>
 </main>
@@ -86,6 +87,7 @@
         <div class="sound-pick"><select id="sndDone" data-key="sndDone"></select><button class="btn btn-small test" data-for="sndDone">Test</button></div>
       </div>
       <label class="toggle"><input type="checkbox" id="ticks" data-key="ticks"><span>3-2-1 beeps before each exercise</span></label>
+      <label class="toggle"><input type="checkbox" id="dana" data-key="dana"><span>Dana mode 🥁 <small>drum circle during each exercise</small></span></label>
       <label class="toggle"><input type="checkbox" id="vibrate" data-key="vibrate"><span>Vibrate on changes <small>(Android)</small></span></label>
       <label class="range-row" for="volume">Volume
         <input type="range" id="volume" data-key="volume" min="0.1" max="1" step="0.05">
@@ -136,6 +138,7 @@
       <li>Keep the timer on screen. Phones pause web apps that are in the background, so switching apps or locking the phone stops the sounds.</li>
       <li>Sounds play even with an iPhone's ringer switched to silent. Turn up the volume with the side buttons.</li>
       <li>No sound? Tap anywhere on the screen once and the sound comes back.</li>
+      <li>Want a beat? Switch on <strong>Dana mode</strong> in settings and a drum circle plays during every exercise.</li>
       <li>Change times and sounds with the gear button. Your choices are remembered.</li>
     </ul>
     <p class="hint">Fit Club Tabata Timer · <a href="https://www.cvilleoutdoorfitness.org/">cvilleoutdoorfitness.org</a> · <span id="version"></span></p>
