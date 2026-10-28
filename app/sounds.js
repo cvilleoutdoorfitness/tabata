@@ -393,11 +393,130 @@ const Sounds = (() => {
     tone(ctx.currentTime + 0.01, final ? 1320 : 880, 0.12, { type: 'square', peak: 0.3 });
   }
 
+
+  // ---- Dana mode: a looping drum circle -------------------------------
+  // Djembe bass/tone/slap, a low conga and a shaker, played on a 16-step
+  // grid with a little human timing and loudness wobble so it grooves
+  // instead of sounding like a drum machine. Two bars, the second with a
+  // fill, then it repeats for as long as the exercise runs.
+
+  const BPM = 112;
+  const STEP = 60 / BPM / 4; // one 16th note
+  // B = djembe bass, t = djembe tone, s = slap, c = low conga, . = rest
+  const GROOVE = [
+    { djembe: 'B..t..t.B.s.t.t.', conga: '..c...c...c.c..c', shaker: 'x.xxx.xxx.xxx.xx' },
+    { djembe: 'B..t..t.B.s.ssss', conga: '..c...c.c.c.c.c.', shaker: 'x.xxx.xxx.xxxxxx' },
+  ];
+
+  let drumBus = null;
+  let drumTimer = null;
+  let drumCtx = null;
+  let drumNext = 0;
+  let drumStep = 0;
+
+  function skin(t, { freq, drop, dur, peak, nFreq, nPeak, nQ = 1 }) {
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(freq * drop, t);
+    o.frequency.exponentialRampToValueAtTime(freq, t + 0.03);
+    o.connect(g); g.connect(drumBus);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + 0.003);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.start(t); o.stop(t + dur + 0.05);
+    if (nPeak) {
+      const n = ctx.createBufferSource();
+      n.buffer = noiseBuf;
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass'; f.frequency.value = nFreq; f.Q.value = nQ;
+      const ng = ctx.createGain();
+      n.connect(f); f.connect(ng); ng.connect(drumBus);
+      ng.gain.setValueAtTime(nPeak, t);
+      ng.gain.exponentialRampToValueAtTime(0.0001, t + Math.min(dur, 0.09));
+      n.start(t, Math.random() * 0.5); n.stop(t + 0.12);
+    }
+  }
+
+  const hits = {
+    B: (t, v) => skin(t, { freq: 70, drop: 1.8, dur: 0.38, peak: 0.95 * v, nFreq: 400, nPeak: 0.25 * v }),
+    t: (t, v) => skin(t, { freq: 240, drop: 1.25, dur: 0.18, peak: 0.55 * v, nFreq: 1200, nPeak: 0.2 * v }),
+    s: (t, v) => skin(t, { freq: 420, drop: 1.1, dur: 0.07, peak: 0.25 * v, nFreq: 2600, nPeak: 0.7 * v, nQ: 1.4 }),
+    c: (t, v) => skin(t, { freq: 165, drop: 1.3, dur: 0.24, peak: 0.5 * v, nFreq: 900, nPeak: 0.12 * v }),
+    x: (t, v) => {
+      const n = ctx.createBufferSource();
+      n.buffer = noiseBuf;
+      const f = ctx.createBiquadFilter();
+      f.type = 'highpass'; f.frequency.value = 6500;
+      const g = ctx.createGain();
+      n.connect(f); f.connect(g); g.connect(drumBus);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.3 * v, t + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+      n.start(t, Math.random() * 0.5); n.stop(t + 0.08);
+    },
+  };
+
+  function scheduleStep(t, step) {
+    const bar = GROOVE[Math.floor(step / 16) % GROOVE.length];
+    const i = step % 16;
+    const accent = i % 4 === 0 ? 1 : 0.75;
+    for (const part of Object.values(bar)) {
+      const h = part[i];
+      if (h === '.') continue;
+      const swing = i % 2 ? STEP * 0.12 : 0; // a touch of swing on the off 16ths
+      const jitter = (Math.random() - 0.5) * 0.012;
+      hits[h](t + swing + jitter, accent * (0.8 + Math.random() * 0.25));
+    }
+  }
+
+  function drumTick() {
+    // iOS may have swapped the context; carry on with the new one.
+    ensure();
+    if (ctx !== drumCtx) { wake(); startBus(); drumNext = ctx.currentTime + 0.05; }
+    while (drumNext < ctx.currentTime + 0.15) {
+      scheduleStep(drumNext, drumStep++);
+      drumNext += STEP;
+    }
+  }
+
+  function startBus() {
+    drumCtx = ctx;
+    drumBus = ctx.createGain();
+    drumBus.gain.value = 0.55; // sits under the whistle and beeps
+    drumBus.connect(master);
+  }
+
+  // Start (true) or stop (false) the drum loop. Safe to call repeatedly.
+  function drums(on, delay = 0) {
+    if (on) {
+      if (drumTimer) return;
+      wake();
+      startBus();
+      drumStep = 0;
+      drumNext = ctx.currentTime + 0.05 + delay;
+      drumTick();
+      drumTimer = setInterval(drumTick, 25);
+    } else if (drumTimer) {
+      clearInterval(drumTimer);
+      drumTimer = null;
+      const bus = drumBus;
+      const c = drumCtx;
+      // Quick fade so notes already queued don't cut off with a click.
+      try {
+        bus.gain.setTargetAtTime(0.0001, c.currentTime, 0.04);
+        setTimeout(() => bus.disconnect(), 400);
+      } catch (e) {}
+      drumBus = null;
+    }
+  }
+
   const list = Object.entries(defs).map(([id, d]) => ({ id, label: d.label }));
 
   // Exposed for tests.
   const context = () => ctx;
   const keepAliveOn = () => !!keepAlive && !keepAlive.paused;
+  const drumsOn = () => !!drumTimer;
 
-  return { unlock, play, tick, setVolume, list, context, keepAliveOn };
+  return { unlock, play, tick, setVolume, drums, list, context, keepAliveOn, drumsOn };
 })();

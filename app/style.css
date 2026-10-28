@@ -135,6 +135,16 @@ body[data-phase="idle"] .bar { visibility: hidden; }
   font-weight: 800;
   min-height: 1.2em;
 }
+.dana-badge {
+  display: none;
+  margin-top: .6vh;
+  padding: 4px 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, .12);
+  font-size: clamp(15px, min(4.5vw, 3vh), 24px);
+  font-weight: 800;
+}
+body.dana[data-phase="work"] .dana-badge { display: inline-block; }
 .bar {
   width: min(100%, 520px);
   height: 14px;
