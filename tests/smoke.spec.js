@@ -73,3 +73,27 @@ test('timer runs a full workout without errors', async ({ page }) => {
   expect(await page.evaluate(async () => !!(await navigator.serviceWorker.getRegistration()))).toBe(true);
   expect(errors).toEqual([]);
 });
+
+test('sound recovers after iOS stops the audio', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+
+  await page.goto('/');
+  await page.click('#mainBtn');
+  await expect.poll(() => page.evaluate(() => Sounds.context().state)).toBe('running');
+  // The silent loop that lets sound through the ringer switch is playing.
+  expect(await page.evaluate(() => Sounds.keepAliveOn())).toBe(true);
+
+  // iOS stopped the context mid-workout (ringer switch, call, lock screen).
+  await page.evaluate(() => { window.oldCtx = Sounds.context(); return window.oldCtx.suspend(); });
+  await page.click('#timer'); // the coach taps the screen
+  await expect.poll(() => page.evaluate(() => Sounds.context().state)).toBe('running');
+  expect(await page.evaluate(() => Sounds.context() !== window.oldCtx)).toBe(true);
+
+  // A context that died completely is rebuilt by the next sound, no tap needed.
+  await page.evaluate(() => Sounds.context().close());
+  await page.evaluate(() => Sounds.tick());
+  await expect.poll(() => page.evaluate(() => Sounds.context().state)).toBe('running');
+
+  expect(errors).toEqual([]);
+});
